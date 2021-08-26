@@ -1,5 +1,7 @@
 include("concordance.jl")
 
+using Ipopt
+
 #Change GFCF_By_Industry_Asset to 19 sector
 flows97 = ExcelReaders.readxlsheet("data"*pathmark*"flow1997.xls", "180x22Combined");
 flows = DataFrame(flows97[4:182, 4:25], :auto);
@@ -63,8 +65,51 @@ push!(flows, ["Q" zeros(1,19)])
 push!(flows, ["R" zeros(1,19)])
 push!(flows, ["S" zeros(1,19)])
 
-#sort!(flows, :Industry)
 sort!(flows)
 
 ausGFCF = ExcelReaders.readxlsheet("data"*pathmark*"5204064_GFCF_By_Industry_Asset.xls", "Data1");
-#ausGFCF2019 =
+ausGFCF = ausGFCF[:,Not(findall(x -> occursin("ALL INDUSTRIES ;", x), string.(ausGFCF[1,:])))]
+ausGFCF2019 = ausGFCF[findall(x -> occursin("2019", x), string.(ausGFCF[:,1])),
+    findall(x -> occursin("Gross fixed capital formation: Chain volume measures ;", x), string.(ausGFCF[1,:]))];
+
+
+IOIGAs19=Array{Union{Nothing, String}}(nothing, length(IOIG));
+for i in eachindex(IOIG);
+    IOIGAs19[i] = IOIGTo19[IOIG[i]]
+end
+
+ausCapReceiv = DataFrame((IOSource[4:117,findall(x -> occursin("Private ;\n Gross Fixed Capital Formation", x), string.(IOSource[2,:]))]+
+IOSource[4:117,findall(x -> occursin("Public Corporations ;\n Gross Fixed Capital Formation", x), string.(IOSource[2,:]))]), [:GFCF]);
+insertcols!(ausCapReceiv ,1, :Industry => IOIGAs19);
+splitIndustry = groupby(ausCapReceiv, :Industry);
+ausCapReceiv = combine(splitIndustry, valuecols(splitIndustry) .=> sum);
+sort!(ausCapReceiv);
+
+ausCapReceivable = ausCapReceiv.GFCF_sum
+
+
+
+#currently just going with 2019 and balancing rows and collumns, had a pretty good look and it doesnt get much closer in other years and it does get much further apart
+ausCapReceivableSum = sum(ausCapReceivable)
+ausGFCF2019Sum = sum(ausGFCF2019)
+avSum = (ausCapReceivableSum + ausGFCF2019Sum)/2;
+
+for i in eachindex(ausCapReceivable)
+    ausCapReceivable[i]=ausCapReceivable[i]*avSum/ausCapReceivableSum;
+end
+for i in eachindex(ausGFCF2019)
+    ausGFCF2019[i]=ausGFCF2019[i]*avSum/ausGFCF2019Sum;
+end
+
+modCap = Model(Ipopt.Optimizer);
+@variable(modCap, x[1:length(ausCapReceivable), 1:length(ausGFCF2019);
+@NLobjective(modCap, Min, sum(((x[i,j] - (flows[i,j]+1000))/ (flows[i,j]+1000))^ 2 for i in eachindex(ausCapReceivable), j in eachindex(ausGFCF2019)));
+for i in eachindex(ausGFCF2019)
+    @constraint(modCap, sum(x[:,i]) == ausGFCF2019[i]+19000;
+end
+for i in eachindex(ausCapReceivable);
+    @constraint(modCap, sum(x[i,:]) == ausCapReceiv[i]+19000;
+end
+
+optimize!(modCap);
+

@@ -91,10 +91,6 @@ for i in [1:1:114;];
         print("ERROR: An input has fallen outside of the range of categories")
     end
 end
-a = Array{Union{Nothing, String}}(nothing, length(IOIG))
-for i in eachindex(IOIG);
-    a[i]=IOIGTo19[IOIG[i]];
-end
 
 #ISIC 4.0 To 19 Sectors
 ANZSICISICSource = CSV.read("data"*pathmark*"ANZSIC06-ISIC3pt1.csv", DataFrame);
