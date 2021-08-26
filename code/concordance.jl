@@ -30,7 +30,7 @@ from19To4 = Dict("A"=> "Primary",
 "S" => "Tertiary")
 
 #IOIG to 19 Sector
-IOSource = ExcelReaders.readxlsheet("5209055001DO001_201819.xls", "Table 5");
+IOSource = ExcelReaders.readxlsheet("data"*pathmark*"5209055001DO001_201819.xls", "Table 5");
 IOIG = IOSource[4:117, 1];
 ANZSICDiv = ["Agriculture, forestry and fishing", "Mining", "Manufacturing", "Electricity, gas, water and waste services", 
 "Construction", "Wholesale trade", "Retail trade", "Accomodation and food services", 
@@ -97,7 +97,7 @@ for i in eachindex(IOIG);
 end
 
 #ISIC 4.0 To 19 Sectors
-ANZSICISICSource = CSV.read("ANZSIC06-ISIC3pt1.csv", DataFrame);
+ANZSICISICSource = CSV.read("data"*pathmark*"ANZSIC06-ISIC3pt1.csv", DataFrame);
 ANZSIC19 = ANZSICISICSource[6:1484, 1][findall(x -> typeof(x)<:String, ANZSICISICSource[6:1484, 4])];
 ISIC = ANZSICISICSource[6:1484, 4][findall(x -> typeof(x)<:String, ANZSICISICSource[6:1484, 4])];
 for i in eachindex(ISIC);
@@ -106,7 +106,7 @@ end
 ISICTo19 = Dict(ISIC .=> ANZSIC19);
 
 #NAIC2007 To 19 Sectors via ISIC 4.0
-NAICSISICSource = ExcelReaders.readxlsheet("2007_NAICS_to_ISIC_4.xls", "NAICS 07 to ISIC 4 technical");
+NAICSISICSource = ExcelReaders.readxlsheet("data"*pathmark*"2007_NAICS_to_ISIC_4.xls", "NAICS 07 to ISIC 4 technical");
 NAICS = string.(Int.(NAICSISICSource[4:1768,1]));
 ISICAsANZSIC = NAICSISICSource[4:1768,3];
 ISICAsANZSIC = string.(ISICAsANZSIC);
@@ -120,7 +120,7 @@ end
 NAICS07To19 = Dict(NAICS .=> NAICSANZSIC19);
 
 #NAIC2002 To 19 Sectors via NAIC2007
-NAICS02To07 = CSV.read("2002_to_2007_NAICS.csv", DataFrame);
+NAICS02To07 = CSV.read("data"*pathmark*"2002_to_2007_NAICS.csv", DataFrame);
 NAICS02To0702 = string.(NAICS02To07[3:1202, 1]);
 NAICS02To0707 = string.(NAICS02To07[3:1202, 3]);
 NAICS07As19 = string.(zeros(length(NAICS02To0707)));
@@ -130,7 +130,7 @@ end
 NAICS02To19 = Dict(NAICS02To0702 .=> NAICS07As19);
 
 #NAIC1997 To 19 Sectors via NAIC2002
-NAICS97To02 = CSV.read("1997_NAICS_to_2002_NAICS.csv", DataFrame);
+NAICS97To02 = CSV.read("data"*pathmark*"1997_NAICS_to_2002_NAICS.csv", DataFrame);
 NAICS97To0297 = string.(NAICS97To02[1:1355, 1]);
 NAICS97To0202 = string.(NAICS97To02[1:1355, 3]);
 NAICS02As19 = string.(zeros(length(NAICS97To0202)));
@@ -142,7 +142,7 @@ NAICS97To0297Trunc = first.(string.(NAICS97To02[1:1355, 1]),4);
 NAICS97To19Trunc = Dict(NAICS97To0297Trunc .=> NAICS02As19);
 
 #Comm180 To 19 Sectors via NAIC 1997
-NAICS97ToComm180 = CSV.read("NAICS_to_Comm180.csv", DataFrame);
+NAICS97ToComm180 = CSV.read("data"*pathmark*"NAICS_to_Comm180.csv", DataFrame);
 NAICS97ToComm18097 = first.([NAICS97ToComm180[1:90,4];NAICS97ToComm180[1:89,9]],4);
 containsStar = findall( x -> occursin("*", x), NAICS97ToComm18097);
 NAICS97ToComm18097[containsStar] = replace.(NAICS97ToComm18097[containsStar], "*" => "");
@@ -166,17 +166,16 @@ Comm180To19=Dict(NAICS97ToComm180180 .=> NAICS97As19);
 
 #Final concordance
 finalConcordance = [NAICS97ToComm180180 NAICS97As19];
-writedlm("Comm180To19Concordance.csv", finalConcordance, ',');
+writedlm("data"*pathmark*"Comm180To19Concordance.csv", finalConcordance, ',');
 
 #Change GFCF_By_Industry_Asset to 19 sector
-flows97 = ExcelReaders.readxlsheet("flow1997.xls", "180x22Combined");
+flows97 = ExcelReaders.readxlsheet("data"*pathmark*"flow1997.xls", "180x22Combined");
 flows = DataFrame(flows97[4:182, 4:25], :auto);
 dataTypeEx = flows[41,4]
 for i in [1:1:179;]
     for j in [1:1:22;]
         if typeof(flows[i,j]) == typeof(dataTypeEx)
             flows[i,j] = Float64(0.0)
-            println("it works")
         end
     end
 end
@@ -218,17 +217,22 @@ for i in eachindex(rowCode);
     rowCode19[i] = Comm180To19[rowCode[i]];
 end
 insertcols!(flows ,1, :Industry => rowCode19);
+insertcols!(flows ,15, :O => zeros(179));
 splitIndustry = groupby(flows, :Industry);
 flows = combine(splitIndustry, valuecols(splitIndustry) .=> sum);
 
-push!(flows, ["A" zeros(1,18)])
-push!(flows, ["D" zeros(1,18)])
-push!(flows, ["H" zeros(1,18)])
-push!(flows, ["K" zeros(1,18)])
-push!(flows, ["N" zeros(1,18)])
-push!(flows, ["P" zeros(1,18)])
-push!(flows, ["Q" zeros(1,18)])
-push!(flows, ["R" zeros(1,18)])
-push!(flows, ["S" zeros(1,18)])
+push!(flows, ["A" zeros(1,19)])
+push!(flows, ["D" zeros(1,19)])
+push!(flows, ["H" zeros(1,19)])
+push!(flows, ["K" zeros(1,19)])
+push!(flows, ["N" zeros(1,19)])
+push!(flows, ["P" zeros(1,19)])
+push!(flows, ["Q" zeros(1,19)])
+push!(flows, ["R" zeros(1,19)])
+push!(flows, ["S" zeros(1,19)])
 
+#sort!(flows, :Industry)
+sort!(flows)
 
+ausGFCF = ExcelReaders.readxlsheet("data"*pathmark*"5204064_GFCF_By_Industry_Asset", "Data1");
+ausGFCF2019 = 
