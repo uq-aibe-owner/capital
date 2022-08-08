@@ -20,3 +20,6 @@ IO19SplitIndustry = groupby(IO19, :Industry);
 IO19 = combine(IO19SplitIndustry, valuecols(IO19SplitIndustry) .=> sum);
 
 FullIO19 = [IO19; [IOHalf[115:122,:] IOSource[[119; 121:126; 128], 117:126]]];
+
+
+writedlm("data"*pathmark*"FullIO19Draft.csv", FullIO19, ',');

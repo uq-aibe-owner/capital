@@ -94,8 +94,8 @@ end
 
 #ISIC 4.0 To 19 Sectors
 ANZSICISICSource = CSV.read("data"*pathmark*"ANZSIC06-ISIC3pt1.csv", DataFrame);
-ANZSIC19 = ANZSICISICSource[6:1484, 1][findall(x -> typeof(x)<:String, ANZSICISICSource[6:1484, 4])];
-ISIC = ANZSICISICSource[6:1484, 4][findall(x -> typeof(x)<:String, ANZSICISICSource[6:1484, 4])];
+ANZSIC19 = ANZSICISICSource[6:1484, 1][findall(x -> typeof(x)<:String15, ANZSICISICSource[6:1484, 4])];
+ISIC = ANZSICISICSource[6:1484, 4][findall(x -> typeof(x)<:String15, ANZSICISICSource[6:1484, 4])];
 for i in eachindex(ISIC);
     ISIC[i]=strip(ISIC[i], ['p']);
 end
