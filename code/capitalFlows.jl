@@ -137,7 +137,7 @@ for k in eachindex(ausCapReceivable)
 end;
 optimize!(modCap);
 
-# Add titles etc. for ease of reading
+# Add titles etc. for ease of reading -J works but this is clumsy fix 
 capitalFlowsTitleRow = permutedims([ANZSICDivShort; "Dwelling"]);
 capitalFlowsTitleCol = ["Titles"; ANZSICDivShort; "Dwelling"];
 capitalFlowsRAS =[capitalFlowsTitleCol [capitalFlowsTitleRow; value.(x)]]
