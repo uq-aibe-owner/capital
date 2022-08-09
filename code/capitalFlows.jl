@@ -124,16 +124,16 @@ end
 # Begin Optimisation
 modCap = Model(Ipopt.Optimizer);
 # Should be equal dimensions
-@variable(modCap, x[1:length(ausCapReceivable), 1:length(ausGFCF2019)]);
+@variable(modCap, x[1:length(ausCapReceivable), 1:length(ausGFCF2019)] >=0);
 # Lowest entropy objective
-@NLobjective(modCap, Min, sum((x[i,j] - 0)^ 2 for i in eachindex(ausCapReceivable), j in eachindex(ausGFCF2019)));
+@NLobjective(modCap, Min, sum((x[i,j] - 0)^2 for i in eachindex(ausCapReceivable), j in eachindex(ausGFCF2019)));
 # Row-sums constraint - must be equal to the GFCF totals
 for j in eachindex(ausGFCF2019)
-    @constraint(modCap, sum(x[:,j]) == ausGFCF2019[j]+20000);
+    @constraint(modCap, sum(x[:,j]) == ausGFCF2019[j]);
 end;
 # Col-sums constraint - must be equal to the IO totals
 for k in eachindex(ausCapReceivable)
-    @constraint(modCap, sum(x[k,:]) == ausCapReceivable[k]+20000);
+    @constraint(modCap, sum(x[k,:]) == ausCapReceivable[k]);
 end;
 optimize!(modCap);
 
