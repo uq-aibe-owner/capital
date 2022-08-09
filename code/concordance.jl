@@ -1,5 +1,5 @@
 #concordance dict between ANZSIC divisions (19 sectors) and various other industry classifications
-using XLSX, ExcelReaders, DataFrames, Tables, JuMP, Ipopt, NamedArrays, DelimitedFiles, CSV;
+using XLSX, ExcelReaders, DataFrames, Tables, JuMP, Ipopt, NamedArrays, DelimitedFiles, CSV, Tables;
 
 #filepath cross system compatability code
 if Sys.KERNEL === :NT || Sys.KERNEL === :Windows

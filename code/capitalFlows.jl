@@ -77,91 +77,72 @@ sort!(flows)
 # print(flows)
 
 
-# Make the guesstimate table
+# Make the big RAS (zero prior)
 
-# ausGFCF = ExcelReaders.readxlsheet("data"*pathmark*"5204064_GFCF_By_Industry_Asset.xls", "Data1");
-# ausGFCF = ausGFCF[:,Not(findall(x -> occursin("ALL INDUSTRIES ;", x), string.(ausGFCF[1,:])))]
-# ausGFCF2019 = ausGFCF[findall(x -> occursin("2019", x), string.(ausGFCF[:,1])),
-#     findall(x -> occursin("Gross fixed capital formation: Current prices ;", x), string.(ausGFCF[1,:]))];
-# ausGFCF2019=[ausGFCF2019 (ausGFCF[findall(x -> occursin("2019", x), string.(ausGFCF[:,1]))])]
+# Bring in GFCF data from excel
+ausGFCF = ExcelReaders.readxlsheet("data"*pathmark*"5204064_GFCF_By_Industry_Asset.xls", "Data1");
+ausGFCF = ausGFCF[:,Not(findall(x -> occursin("ALL INDUSTRIES ;", x), string.(ausGFCF[1,:])))]
+# Select only totals
+ausGFCF2019 = ausGFCF[findall(x -> occursin("2019", x), string.(ausGFCF[:,1])),
+    findall(x -> occursin("Gross fixed capital formation: Current prices ;", x), string.(ausGFCF[1,:]))];
+# Add dwelling data to the end
+ausGFCF2019=[vec(ausGFCF2019); (ausGFCF[findall(x -> occursin("2019", x), string.(ausGFCF[:,1])),
+findall(x -> occursin("Dwellings: Current prices ;", x), string.(ausGFCF[1,:]))]
++ausGFCF[findall(x -> occursin("2019", x), string.(ausGFCF[:,1])),
+findall(x -> occursin("Ownership transfer costs: Current prices ;", x), string.(ausGFCF[1,:]))])];
 
+# Make a new Dict
+IOIGAs19=Array{Union{Nothing, String}}(nothing, length(IOIG));
+for i in eachindex(IOIG);
+    IOIGAs19[i] = IOIGTo19[IOIG[i]]
+end
 
+# Import IO data
+IOSource8 = ExcelReaders.readxlsheet("data"*pathmark*"5209055001DO001_201819.xls", "Table 8");
+# Isolate GFCF
+privateGFCF = IOSource8[4:117,findall(x -> occursin("Private ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
+publicGFCF = IOSource8[4:117,findall(x -> occursin("Public Corporations ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
+govGFCF = IOSource8[4:117,findall(x -> occursin("General Government ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
 
- #findall(x -> occursin("Dwellings: Current prices ;", x), string.(ausGFCF[1,:]))]
-# +ausGFCF[findall(x -> occursin("2019", x), string.(ausGFCF[:,1])),
-# findall(x -> occursin("Ownership transfer costs: Current prices ;", x), string.(ausGFCF[1,:]))])];
+# Grouping GFCF receivable by 19 sectors (dwellings is all zero in capital)
+ausCapReceiv = DataFrame(privateGFCF+publicGFCF+govGFCF, [:GFCF]);
+insertcols!(ausCapReceiv ,1, :Industry => IOIGAs19);
+splitIndustry = groupby(ausCapReceiv, :Industry);
+ausCapReceiv = combine(splitIndustry, valuecols(splitIndustry) .=> sum);
+sort!(ausCapReceiv);
 
-# IOIGAs19=Array{Union{Nothing, String}}(nothing, length(IOIG));
-# for i in eachindex(IOIG);
-#     IOIGAs19[i] = IOIGTo19[IOIG[i]]
-# end
+# Add final 0 on for ownership of dwellings
+ausCapReceivable = [ausCapReceiv.GFCF_sum; 0];
 
-# IOSource8 = ExcelReaders.readxlsheet("data"*pathmark*"5209055001DO001_201819.xls", "Table 8");
+# Balancing sums, there is only a small difference but IO data is king so we scale to that
+ausCapReceivableSum = sum(ausCapReceivable)
+ausGFCF2019Sum = sum(ausGFCF2019)
+for i in eachindex(ausGFCF2019)
+    ausGFCF2019[i]=ausGFCF2019[i]*ausCapReceivableSum/ausGFCF2019Sum;
+end
 
-# privateGFCF = IOSource8[4:117,findall(x -> occursin("Private ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
-# publicGFCF = IOSource8[4:117,findall(x -> occursin("Public Corporations ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
-# govGFCF = IOSource8[4:117,findall(x -> occursin("General Government ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
+# Begin Optimisation
+modCap = Model(Ipopt.Optimizer);
+# Should be equal dimensions
+@variable(modCap, x[1:length(ausCapReceivable), 1:length(ausGFCF2019)]);
+# Lowest entropy objective
+@NLobjective(modCap, Min, sum((x[i,j] - 0)^ 2 for i in eachindex(ausCapReceivable), j in eachindex(ausGFCF2019)));
+# Row-sums constraint - must be equal to the GFCF totals
+for j in eachindex(ausGFCF2019)
+    @constraint(modCap, sum(x[:,j]) == ausGFCF2019[j]+20000);
+end;
+# Col-sums constraint - must be equal to the IO totals
+for k in eachindex(ausCapReceivable)
+    @constraint(modCap, sum(x[k,:]) == ausCapReceivable[k]+20000);
+end;
+optimize!(modCap);
 
-# privateGFCFTot = IOSource8[127,findall(x -> occursin("Private ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
-# publicGFCFTot = IOSource8[127,findall(x -> occursin("Public Corporations ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
-# govGFCFTot = IOSource8[127,findall(x -> occursin("General Government ; Gross Fixed Capital Formation", x), string.(IOSource8[2,:]))]
+# Add titles etc. for ease of reading
+capitalFlowsTitleRow = permutedims([ANZSICDivShort; "Dwelling"]);
+capitalFlowsTitleCol = ["Titles"; ANZSICDivShort; "Dwelling"];
+capitalFlowsRAS =[capitalFlowsTitleCol [capitalFlowsTitleRow; value.(x)]]
+capitalFlowsRAS = DataFrame(capitalFlowsRAS[2:size(capitalFlowsRAS, 1), :], capitalFlowsRAS[1,:])
 
-# privateGFCFSum = sum(privateGFCF)
-# publicGFCFSum = sum(publicGFCF)
-# govGFCFSum = sum(govGFCF)
-
-# for i in eachindex(privateGFCF);
-#     privateGFCF[i] = privateGFCF[i]*privateGFCFTot/privateGFCFSum
-#     publicGFCF[i] = publicGFCF[i]*publicGFCFTot/publicGFCFSum
-#     govGFCF[i] = govGFCF[i]*govGFCFTot/govGFCFSum
-# end
-
-
-
-
-# ausCapReceiv = DataFrame(privateGFCF+publicGFCF+govGFCF, [:GFCF]);
-# insertcols!(ausCapReceiv ,1, :Industry => IOIGAs19);
-# splitIndustry = groupby(ausCapReceiv, :Industry);
-# ausCapReceiv = combine(splitIndustry, valuecols(splitIndustry) .=> sum);
-# sort!(ausCapReceiv);
-
-# govCapReceiv = DataFrame(govGFCF, [:GFCF]);
-# insertcols!(govCapReceiv ,1, :Industry => IOIGAs19);
-# splitIndustry = groupby(govCapReceiv, :Industry);
-# govCapReceiv = combine(splitIndustry, valuecols(splitIndustry) .=> sum);
-# sort!(govCapReceiv);
-
-# ausCapReceivable = [ausCapReceiv.GFCF_sum; 0];
-# govCapReceivable = [govCapReceiv.GFCF_sum; 0];
-
-
-
-# #balancing rows and collumn sums(very small diff)
-# ausCapReceivableSum = sum(ausCapReceivable)
-# ausGFCF2019Sum = sum(ausGFCF2019)
-# avSum = (ausCapReceivableSum + ausGFCF2019Sum)/2;
-# for i in eachindex(ausCapReceivable)
-#     ausCapReceivable[i]=ausCapReceivable[i]*avSum/ausCapReceivableSum;
-# end
-# for i in eachindex(ausGFCF2019)
-#     ausGFCF2019[i]=ausGFCF2019[i]*avSum/ausGFCF2019Sum;
-# end
-
-
-# modCap = Model(Ipopt.Optimizer);
-# @variable(modCap, x[1:length(ausCapReceivable), 1:length(ausGFCF2019)]);
-# @NLobjective(modCap, Min, sum(((x[i,j] - (flows[i,j]+1000))/ (flows[i,j]+1000))^ 2 for i in eachindex(ausCapReceivable), j in eachindex(ausGFCF2019)));
-# for j in eachindex(ausGFCF2019)
-#     @constraint(modCap, sum(x[:,j]) == ausGFCF2019[j]+20000);
-# end;
-# for k in eachindex(ausCapReceivable)
-#     @constraint(modCap, sum(x[k,:]) == ausCapReceivable[k]+20000);
-# end;
-# optimize!(modCap);
-
-# capitalFlowsTitleRow = permutedims([ANZSICDivShort; "Dwelling"]);
-# capitalFlowsTitleCol = ["Titles"; ANZSICDivShort; "Dwelling"];
-# capitalFlowsDraft =[capitalFlowsTitleCol [capitalFlowsTitleRow; value.(x)]]
-
-# writedlm("data"*pathmark*"capitalFlowsDraft.csv", capitalFlowsDraft, ',');
+# Export tables as CSV
+CSV.write("data"*pathmark*"capitalFlowsRAS.csv", capitalFlowsRAS);
 CSV.write("data"*pathmark*"UScapitalFlows.csv", flows);
