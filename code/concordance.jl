@@ -70,54 +70,58 @@ from20ToInd = Dict{String, Int64}();
 for i in eachindex(ANZSICDivByLetter);
     from20ToInd[ANZSICDivByLetter[i]] = Int(i);
 end
-IOIGTo20 = Dict{Float64, String}();
-for i in [1:1:114;]
-  test = IOIG[i] / 100
-    if 1 <= test < 6
-        IOIGTo20[IOIG[i]]="A"
-    elseif 6 <= test < 10
-        IOIGTo20[IOIG[i]]="B"
-    elseif 10 <= test < 26
-        IOIGTo20[IOIG[i]]="C"
-    elseif 26 <= test < 30
-        IOIGTo20[IOIG[i]]="D"
-    elseif 30 <= test < 33
-        IOIGTo20[IOIG[i]]="E"
-    elseif 33 <= test < 39
-        IOIGTo20[IOIG[i]]="F"
-    elseif 39 <= test < 44
-        IOIGTo20[IOIG[i]]="G"
-    elseif 44 <= test < 46
-        IOIGTo20[IOIG[i]]="H"
-    elseif 46 <= test < 54
-        IOIGTo20[IOIG[i]]="I"
-    elseif 54 <= test < 62
-        IOIGTo20[IOIG[i]]="J"
-    elseif 62 <= test < 66
-        IOIGTo20[IOIG[i]]="K"
-      elseif (66 <= test < 67 || 67.02 <= test < 69) #ownership of dwellings
-        IOIGTo20[IOIG[i]]="L"
-    elseif 69 <= test < 72
-        IOIGTo20[IOIG[i]]="M"
-    elseif 72 <= test < 75
-        IOIGTo20[IOIG[i]]="N"
-    elseif 75 <= test < 80
-        IOIGTo20[IOIG[i]]="O"
-    elseif 80 <= test < 84
-        IOIGTo20[IOIG[i]]="P"
-    elseif 84 <= test < 89
-        IOIGTo20[IOIG[i]]="Q"
-    elseif 89 <= test < 94
-        IOIGTo20[IOIG[i]]="R"
-    elseif 94 <= test < 96
-        IOIGTo20[IOIG[i]]="S"
-    elseif 67 <= test < 67.02
-        IOIGTo20[IOIG[i]]="T"
-    else
-        print("ERROR: An input has fallen outside of the range of categories")
-    end
-end
 
+function map20ioig(ioigcol)
+  tmpdct = Dict{Float64, String}();
+  for i in [1:1:length(ioigcol);]
+    test = ioigcol[i] / 100
+      if 1 <= test < 6
+          tmpdct[ioigcol[i]]="A"
+      elseif 6 <= test < 10
+          tmpdct[ioigcol[i]]="B"
+      elseif 10 <= test < 26
+          tmpdct[ioigcol[i]]="C"
+      elseif 26 <= test < 30
+          tmpdct[ioigcol[i]]="D"
+      elseif 30 <= test < 33
+          tmpdct[ioigcol[i]]="E"
+      elseif 33 <= test < 39
+          tmpdct[ioigcol[i]]="F"
+      elseif 39 <= test < 44
+          tmpdct[ioigcol[i]]="G"
+      elseif 44 <= test < 46
+          tmpdct[ioigcol[i]]="H"
+      elseif 46 <= test < 54
+          tmpdct[ioigcol[i]]="I"
+      elseif 54 <= test < 62
+          tmpdct[ioigcol[i]]="J"
+      elseif 62 <= test < 66
+          tmpdct[ioigcol[i]]="K"
+        elseif (66 <= test < 67 || 67.02 <= test < 69) #ownership of dwellings
+          tmpdct[ioigcol[i]]="L"
+      elseif 69 <= test < 72
+          tmpdct[ioigcol[i]]="M"
+      elseif 72 <= test < 75
+          tmpdct[ioigcol[i]]="N"
+      elseif 75 <= test < 80
+          tmpdct[ioigcol[i]]="O"
+      elseif 80 <= test < 84
+          tmpdct[ioigcol[i]]="P"
+      elseif 84 <= test < 89
+          tmpdct[ioigcol[i]]="Q"
+      elseif 89 <= test < 94
+          tmpdct[ioigcol[i]]="R"
+      elseif 94 <= test < 96
+          tmpdct[ioigcol[i]]="S"
+      elseif 67 <= test < 67.02
+          tmpdct[ioigcol[i]]="T"
+      else
+          print("ERROR: An input has fallen outside of the range of categories")
+      end
+  end
+  return tmpdct
+end
+IOIGTo20 = map20ioig(IOIG)
 #ISIC 4.0 To 20 Sectors
 ANZSICISICSource = CSV.read("data"*pathmark*"ANZSIC06-ISIC3pt1.csv", DataFrame);
 ANZSIC20 = ANZSICISICSource[6:1484, 1][findall(x -> typeof(x)<:String15, ANZSICISICSource[6:1484, 4])];

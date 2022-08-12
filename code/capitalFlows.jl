@@ -105,11 +105,6 @@ ausGFCFrow= ausGFCFcurrent[
 #ausGFCFrow[length(ausGFCFrow) - 1] = (ausGFCFrow[length(ausGFCFrow) - 1]
 #                                      + ausGFCFrow[length(ausGFCFrow)]);
 ausGFCFrow = ausGFCFrow[Not(1, length(ausGFCFrow))];
-# Make a new Dict
-IOIGAs20=Array{Union{Nothing, String}}(nothing, length(IOIG));
-for i in eachindex(IOIG);
-    IOIGAs20[i] = IOIGTo20[IOIG[i]]
-end
 
 #==============================================================================
 wrangle the IO table
@@ -148,11 +143,20 @@ for i in [1:1:numsec;]
   coltitles[i + 2] = "IOIG"*values(coltitles[i + 2])
 end
 rename!(iotable8, string.(coltitles), makeunique=true)
-# remove initial rows
+# remove initial rows and tidy up
 iotable8 = iotable8[Not(range(1, titlerow + 2)), :]
 iotable8 = dropmissing(iotable8, :industry)
 iotable8 = iotable8[Not(findall(x -> occursin("Commonwealth", x),
                                 string.(iotable8.industry))),:]
+# make sure our ioig codes match the number of columns  
+ioigcodes = iotable8.IOIG[1:numsec]
+ioigcodes = parse.(Float64, ioigcodes)
+ioigto20 = map20ioig(ioigcodes)
+# make a dict mapping the ioig to anzsic 20
+ioigAs20=Array{Union{Nothing, String}}(nothing, length(ioigto20));
+for i in eachindex(ioigcodes);
+    ioigAs20[i] = ioigto20[ioigcodes[i]]
+end
 # convert to numbers
 iotable8[:, 3:numcol] = filter.(x -> !isspace(x), iotable8[:, 3:numcol])
 # Isolate GFCF
@@ -160,31 +164,33 @@ Q3 = parse.(Float64, iotable8.Q3)
 Q4 = parse.(Float64, iotable8.Q4)
 Q5 = parse.(Float64, iotable8.Q5)
 
-ioigGfcf = DataFrame(:inv => Q3 + Q4 + Q5);
+ioigGfcf = Q3 + Q4 + Q5;
+ausprodrow = findfirst(x -> occursin("Australian Production", x),
+                  string.(iotable8.industry));
+T1row = findfirst(x -> occursin("T1", x),
+                  string.(iotable8.IOIG));
+ioigGfcftot = ioigGfcf[ausprodrow];
+ioigGfcf = ioigGfcf[1 : numsec] / ioigGfcf[T1row] * ioigGfcftot;
+ioigGfcf = DataFrame(:inv => ioigGfcf);
 # Grouping GFCF receivable by 20 sectors (dwellings is all zero in capital)
-break
-insertcols!(ioigGfcf, 1, :Industry => IOIGAs20);
-splitIndustry = groupby(ioigGfcf, :Industry);
+insertcols!(ioigGfcf, 1, :anzcode => ioigAs20);
+splitIndustry = groupby(ioigGfcf, :anzcode);
 anzdivgfcf = combine(splitIndustry, valuecols(splitIndustry) .=> sum);
 sort!(anzdivgfcf);
 
 # Balancing row and column sums to IO table 8 total
-ausprodrow = findfirst(x -> occursin("Australian Production", x),
-                  string.(iotable8.industry))
-anzdivgfcfsum = anzdivgfcf.inv_sum[ausprodrow]
-break
-ausGFCFsum = sum(ausGFCFrow);
+ausGFCFtot = sum(ausGFCFrow);
 for i in eachindex(ausGFCFrow)
-    ausGFCFrow[i] = ausGFCFrow[i] * anzdivgfcfsum / ausGFCFsum;
+    ausGFCFrow[i] = ausGFCFrow[i] * ioigGfcftot / ausGFCFtot;
 end;
 # pull in proportionalised kapital flows to ras
-#y = DataFrame(CSV.File("data/propd-to-ras.csv"))
-#y = Matrix(y)
+y = DataFrame(CSV.File("data/propd-to-ras.csv"))
+y = Matrix(y)
 # generate an initial table for the ras
-y = zeros(length(ausGFCFrow), length(anzdivgfcf.inv_sum))
-for i in eachindex(ausGFCFrow), j in eachindex(anzdivgfcf);
-  y[i, j] = anzdivgfcf[i] / anzdivgfcfsum * ausGFCFrow[j]
-end  
+#y = zeros(length(ausGFCFrow), length(anzdivgfcf.inv_sum))
+#for i in eachindex(ausGFCFrow), j in eachindex(anzdivgfcf);
+#  y[i, j] = anzdivgfcf[i] / ioigGfcftot * ausGFCFrow[j]
+#end  
 
 # Begin Optimisation
 modCap = Model(Ipopt.Optimizer);
