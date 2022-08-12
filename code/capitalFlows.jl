@@ -120,22 +120,26 @@ ausGFCFrow = ausGFCFrow[Not(1, length(ausGFCFrow))];
 wrangle the IO table
 ==============================================================================#
 # what year are we importing?
-fyend = "2007"
+fyend = "2019"
 # Import IO data
-iotable8 = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table8.csv"));
-iotable5 = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table5.csv"));
+iotable8 = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table8.csv",
+                              header=false));
+iotable5 = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table5.csv",
+                              header=false));
 # instantiate a variable for the number of sectors
 numsec = 0
 occursin("111", string(iotable8[5, 1])) ? numsec = 111 : numsec = 114
 # since numsec is an array
 numsec = numsec[1];
 # find the title row index
-titlerow = findall(x -> occursin("USE", x), string.(iotable8[:,2]));
-# since titlerow is of type array and we only need its value
-titlerow = titlerow[1]
+titlerow = findfirst(x -> occursin("USE", x), string.(iotable8[:,2]));
 # check the two tables have the same year
-commonwealthcell = titlerow + 2 + numsec + 17
-(iotable8[commonwealthcell, 2] != iotable5[commonwealthcell, 2]
+commonwealthrow8 = findfirst(x -> occursin("Commonwealth", x), 
+                            string.(iotable8[:, 2]));
+commonwealthrow5 = findfirst(x -> occursin("Commonwealth", x), 
+                            string.(iotable5[:, 2]));
+
+(iotable8[commonwealthrow8, 2] != iotable5[commonwealthrow5, 2]
  ? println("WARNING: io table release years don't match!")
  : println("io table release years match"))
 # standardise the table
@@ -143,12 +147,12 @@ numcol = numsec + 12;
 iotable8 = iotable8[:, 1:numcol];
 # create column titles
 coltitles = collect(values(iotable8[titlerow, :]))
+coltitles[1] = "IOIG"
 coltitles[2] = "industry"
 morecoltitles = collect(values(iotable8[titlerow + 2,
                                         numsec + 3 : numsec + 12]))
 coltitles[numsec + 3 : numsec + 12] = morecoltitles
 coltitles = filter.(x -> !isspace(x), coltitles)
-coltitles[1] = "IOIG"
 for i in [1:1:numsec;]
   coltitles[i + 2] = "IOIG"*values(coltitles[i + 2])
 end
@@ -161,7 +165,7 @@ iotable8 = iotable8[Not(findall(x -> occursin("Commonwealth", x),
 # make sure our ioig codes match the number of columns  
 ioigcodes = iotable8.IOIG[1:numsec]
 ioigcodes = parse.(Float64, ioigcodes)
-ioigto20 = map20ioig(ioigcodes)
+ioigto20 = mapioig20(ioigcodes)
 # make a dict mapping the ioig to anzsic 20
 ioigAs20=Array{Union{Nothing, String}}(nothing, length(ioigto20));
 for i in eachindex(ioigcodes);

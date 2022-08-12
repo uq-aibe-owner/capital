@@ -71,7 +71,7 @@ for i in eachindex(ANZSICDivByLetter);
     from20ToInd[ANZSICDivByLetter[i]] = Int(i);
 end
 
-function map20ioig(ioigcol)
+function mapioig20(ioigcol)
   tmpdct = Dict{Float64, String}();
   for i in [1:1:length(ioigcol);]
     test = ioigcol[i] / 100
@@ -121,7 +121,7 @@ function map20ioig(ioigcol)
   end
   return tmpdct
 end
-IOIGTo20 = map20ioig(IOIG)
+IOIGTo20 = mapioig20(IOIG)
 #ISIC 4.0 To 20 Sectors
 ANZSICISICSource = CSV.read("data"*pathmark*"ANZSIC06-ISIC3pt1.csv", DataFrame);
 ANZSIC20 = ANZSICISICSource[6:1484, 1][findall(x -> typeof(x)<:String15, ANZSICISICSource[6:1484, 4])];
