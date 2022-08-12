@@ -36,7 +36,7 @@ flows = select!(flows, Not(:x16));
 n = ncol(flows) + 1;
 insertcols!(flows, n, :T => zeros(length(flows.x1)));
 
-print(flows)
+#print(flows)
 
 # Renaming to Aus 19 Sectors codes
 #= Because we begin with the 180x22 flows table, and combined a few above, we 
@@ -86,6 +86,10 @@ push!(flows, ["Q" zeros(1, ncol(flows) - 1)])
 push!(flows, ["R" zeros(1, ncol(flows) - 1)])
 push!(flows, ["S" zeros(1, ncol(flows) - 1)])
 
+#------------------------------------------------------------------------------
+# what year are we importing?
+#------------------------------------------------------------------------------
+fyend = "2007"
 #==============================================================================
 Aggregate GFCF data
 ==============================================================================#
@@ -111,7 +115,7 @@ ausGFCFcurrent = ausGFCFall[:,
 ausGFCFdates = ausGFCFall[:,1];
 ausGFCFcurrent = hcat(ausGFCFdates, ausGFCFcurrent);
 ausGFCFrow= ausGFCFcurrent[
-  findall(x -> occursin("2007", x), string.(ausGFCFcurrent[:,1])), :];
+  findall(x -> occursin(fyend, x), string.(ausGFCFcurrent[:,1])), :];
 #ausGFCFrow[length(ausGFCFrow) - 1] = (ausGFCFrow[length(ausGFCFrow) - 1]
 #                                      + ausGFCFrow[length(ausGFCFrow)]);
 ausGFCFrow = ausGFCFrow[Not(1, length(ausGFCFrow))];
@@ -119,8 +123,6 @@ ausGFCFrow = ausGFCFrow[Not(1, length(ausGFCFrow))];
 #==============================================================================
 wrangle the IO table
 ==============================================================================#
-# what year are we importing?
-fyend = "2019"
 # Import IO data
 iotable8 = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table8.csv",
                               header=false));
@@ -128,7 +130,6 @@ iotable5 = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table5.csv",
                               header=false));
 # instantiate a variable for the number of sectors
 numsec = 0
-occursin("111", string(iotable8[5, 1])) ? numsec = 111 : numsec = 114
 # since numsec is an array
 numsec = numsec[1];
 # find the title row index
@@ -138,11 +139,14 @@ commonwealthrow8 = findfirst(x -> occursin("Commonwealth", x),
                             string.(iotable8[:, 2]));
 commonwealthrow5 = findfirst(x -> occursin("Commonwealth", x), 
                             string.(iotable5[:, 2]));
-
+# testing
 (iotable8[commonwealthrow8, 2] != iotable5[commonwealthrow5, 2]
  ? println("WARNING: io table release years don't match!")
  : println("io table release years match"))
 # standardise the table
+(occursin("111 INDUSTRIES", string(iotable8[1:6, 1]))
+  ? numsec = 111
+  : numsec = 114)
 numcol = numsec + 12;
 iotable8 = iotable8[:, 1:numcol];
 # create column titles
@@ -152,6 +156,7 @@ coltitles[2] = "industry"
 morecoltitles = collect(values(iotable8[titlerow + 2,
                                         numsec + 3 : numsec + 12]))
 coltitles[numsec + 3 : numsec + 12] = morecoltitles
+coltitles[ismissing.(coltitles)] .= "0"
 coltitles = filter.(x -> !isspace(x), coltitles)
 for i in [1:1:numsec;]
   coltitles[i + 2] = "IOIG"*values(coltitles[i + 2])
@@ -240,7 +245,7 @@ RAS
 modCap = Model(Ipopt.Optimizer);
 # Should be equal dimensions
 @variable(modCap, x[1:length(anzdivgfcf.inv_sum),
-                    1:length(ausGFCFrow)] >= 0);
+                    1:length(ausGFCFrow)] >= 0.0001);
 # Max entropy objective (or min relative to uniform)
 @NLobjective(modCap,
              Min,
@@ -252,11 +257,13 @@ modCap = Model(Ipopt.Optimizer);
 
 # Row-sums constraint - must be equal to the GFCF totals
 for j in eachindex(ausGFCFrow)
-    @constraint(modCap, sum(x[:,j]) == ausGFCFrow[j]);
+    @constraint(modCap, sum(x[:,j]) <= ausGFCFrow[j] + 1);
+    @constraint(modCap, sum(x[:,j]) >= ausGFCFrow[j] - 1);
 end;
 # Col-sums constraint - must be equal to the IO totals
 for k in eachindex(anzdivgfcf.inv_sum)
-    @constraint(modCap, sum(x[k,:]) == anzdivgfcf.inv_sum[k]);
+    @constraint(modCap, sum(x[k,:]) <= anzdivgfcf.inv_sum[k] + 1);
+    @constraint(modCap, sum(x[k,:]) >= anzdivgfcf.inv_sum[k] - 1);
 end;
 optimize!(modCap);
 
