@@ -6,7 +6,9 @@ include("concordance.jl")
 
 using DataFrames, JuMP, Ipopt, DelimitedFiles;
 
-#Change GFCF_By_Industry_Asset to 20 sector
+#==============================================================================
+Aggregate US capital flows table to Aus 19 sectors
+==============================================================================#
 flows97 = ExcelReaders.readxlsheet("data"*pathmark*"flow1997.xls", 
     "180x22Combined");
 flows = DataFrame(flows97[4:182, 4:25], :auto);
@@ -18,8 +20,6 @@ for i in [1:1:179;]
         end
     end
 end
-
-
 
 # Aggregating to 20 sector
 # Combining all manufacturing into the same sector
@@ -43,7 +43,8 @@ print(flows)
 have 18 industries. This below is simply mapping these from the 18 combined 
 industries into the Aus 19 industries categories (public sector is missing). 
 This is done below by hand since it is so few sectors. It is effectively the 
-concordance. =#
+concordance. The numbers "x1" etc correlate to the numberings of these 22 
+industries of the BEA data, so the mapping below is meaningful =#
 rename!(flows, :x1 => :A)
 rename!(flows, :x2 => :B)
 rename!(flows, :x3 => :D)
@@ -85,8 +86,9 @@ push!(flows, ["Q" zeros(1, ncol(flows) - 1)])
 push!(flows, ["R" zeros(1, ncol(flows) - 1)])
 push!(flows, ["S" zeros(1, ncol(flows) - 1)])
 
-
-
+#==============================================================================
+Aggregate GFCF data
+==============================================================================#
 
 # Bring in GFCF data from excel
 ausGFCFall = ExcelReaders.readxlsheet(
@@ -229,6 +231,7 @@ print(flows)
 #==============================================================================
 RAS
 ==============================================================================#
+
 # Begin Optimisation
 modCap = Model(Ipopt.Optimizer);
 # Should be equal dimensions
