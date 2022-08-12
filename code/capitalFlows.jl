@@ -7,7 +7,8 @@ include("concordance.jl")
 using DataFrames, JuMP, Ipopt, DelimitedFiles;
 
 #Change GFCF_By_Industry_Asset to 20 sector
-flows97 = ExcelReaders.readxlsheet("data"*pathmark*"flow1997.xls", "180x22Combined");
+flows97 = ExcelReaders.readxlsheet("data"*pathmark*"flow1997.xls", 
+    "180x22Combined");
 flows = DataFrame(flows97[4:182, 4:25], :auto);
 dataTypeEx = flows[41,4]
 for i in [1:1:179;]
@@ -18,17 +19,31 @@ for i in [1:1:179;]
     end
 end
 
+
+
 # Aggregating to 20 sector
+# Combining all manufacturing into the same sector
 flows.x5 = flows.x5+flows.x6+flows.x7;
 flows = select!(flows, Not(:x6));
 flows = select!(flows, Not(:x7));
+# Combining Transportation and Warehouses into the one sector
 flows.x10 = flows.x10 + flows.x11;
 flows = select!(flows, Not(:x11));
+# Combining "Professional and technical services" and "Management of companies 
+# and enterprises" into the one sector
 flows.x15 = flows.x15 + flows.x16;
 flows = select!(flows, Not(:x16));
 n = ncol(flows) + 1;
 insertcols!(flows, n, :T => zeros(length(flows.x1)));
-# Renaming to 20 Sectors codes
+
+print(flows)
+
+# Renaming to Aus 19 Sectors codes
+#= Because we begin with the 180x22 flows table, and combined a few above, we 
+have 18 industries. This below is simply mapping these from the 18 combined 
+industries into the Aus 19 industries categories (public sector is missing). 
+This is done below by hand since it is so few sectors. It is effectively the 
+concordance. =#
 rename!(flows, :x1 => :A)
 rename!(flows, :x2 => :B)
 rename!(flows, :x3 => :D)
@@ -70,14 +85,7 @@ push!(flows, ["Q" zeros(1, ncol(flows) - 1)])
 push!(flows, ["R" zeros(1, ncol(flows) - 1)])
 push!(flows, ["S" zeros(1, ncol(flows) - 1)])
 
-#sort!(flows)
 
-#flows = select!(flows, Not(:Industry));
-
-#insertcols!(flows ,20, :Dwelling => zeros(20));
-#push!(flows, zeros(1,20));
-
-# print(flows)
 
 
 # Bring in GFCF data from excel
@@ -192,6 +200,35 @@ y = Matrix(y)
 #  y[i, j] = anzdivgfcf[i] / ioigGfcftot * ausGFCFrow[j]
 #end  
 
+#==============================================================================
+Make prior scaled from Aus Data
+==============================================================================#
+# Make vector of the proportion of each row sum element as a fraction of the 
+# total
+rowSumsProps = ones(20);
+for i in 1:20
+    rowSumsProps[i] = ausGFCFrow[i] / ausGFCFtot;
+end
+# Make prior
+ausPropPrior = ones(20, 20);
+for i in 1:20
+    for j in 1:20
+        ausPropPrior[i,j] = rowSumsProps[j] *  anzdivgfcf.inv_sum[i];
+    end
+end
+
+#==============================================================================
+Make prior from US Data
+==============================================================================#
+
+print(flows)
+# want to sort all rows by industry in order
+# need to exclude title column after that step
+
+
+#==============================================================================
+RAS
+==============================================================================#
 # Begin Optimisation
 modCap = Model(Ipopt.Optimizer);
 # Should be equal dimensions
