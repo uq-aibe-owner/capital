@@ -116,8 +116,10 @@ ausGFCFdates = ausGFCFall[:,1];
 ausGFCFcurrent = hcat(ausGFCFdates, ausGFCFcurrent);
 ausGFCFrow= ausGFCFcurrent[
   findall(x -> occursin(fyend, x), string.(ausGFCFcurrent[:,1])), :];
-#ausGFCFrow[length(ausGFCFrow) - 1] = (ausGFCFrow[length(ausGFCFrow) - 1]
-#                                      + ausGFCFrow[length(ausGFCFrow)]);
+# add ownership transfer costs to dwellings
+ausGFCFrow[length(ausGFCFrow) - 1] = (ausGFCFrow[length(ausGFCFrow) - 1]
+                                      + ausGFCFrow[length(ausGFCFrow)]);
+# remove date column and ownership transfer costs
 ausGFCFrow = ausGFCFrow[Not(1, length(ausGFCFrow))];
 
 #==============================================================================
@@ -203,7 +205,7 @@ for i in eachindex(ausGFCFrow)
     ausGFCFrow[i] = ausGFCFrow[i] * ioigGfcftot / ausGFCFtot;
 end;
 # pull in proportionalised kapital flows to ras
-y = DataFrame(CSV.File("data/propd-to-ras.csv"))
+y = DataFrame(CSV.File("data/propd-to-ras.csv", header=false))
 y = Matrix(y)
 # generate an initial table for the ras
 #y = zeros(length(ausGFCFrow), length(anzdivgfcf.inv_sum))
