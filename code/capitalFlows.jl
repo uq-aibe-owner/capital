@@ -33,8 +33,6 @@ flows = select!(flows, Not(:x11));
 # and enterprises" into the one sector
 flows.x15 = flows.x15 + flows.x16;
 flows = select!(flows, Not(:x16));
-n = ncol(flows) + 1;
-insertcols!(flows, n, :T => zeros(length(flows.x1)));
 
 #print(flows)
 
@@ -72,20 +70,27 @@ for i in eachindex(rowCode);
     rowCode20[i] = Comm180To20[rowCode[i]];
 end
 insertcols!(flows ,1, :Industry => rowCode20);
-insertcols!(flows ,15, :O => zeros(179));
 splitIndustry = groupby(flows, :Industry);
 flows = combine(splitIndustry, valuecols(splitIndustry) .=> sum);
 
-push!(flows, ["A" zeros(1, ncol(flows) - 1)])
-push!(flows, ["D" zeros(1, ncol(flows) - 1)])
-push!(flows, ["H" zeros(1, ncol(flows) - 1)])
-push!(flows, ["K" zeros(1, ncol(flows) - 1)])
-push!(flows, ["N" zeros(1, ncol(flows) - 1)])
-push!(flows, ["P" zeros(1, ncol(flows) - 1)])
-push!(flows, ["Q" zeros(1, ncol(flows) - 1)])
-push!(flows, ["R" zeros(1, ncol(flows) - 1)])
-push!(flows, ["S" zeros(1, ncol(flows) - 1)])
-
+rename!(flows, :A_sum => :A)
+rename!(flows, :B_sum => :B)
+rename!(flows, :C_sum => :C)
+rename!(flows, :D_sum => :D)
+rename!(flows, :E_sum => :E)
+rename!(flows, :F_sum => :F)
+rename!(flows, :G_sum => :G)
+rename!(flows, :H_sum => :H)
+rename!(flows, :I_sum => :I)
+rename!(flows, :J_sum => :J)
+rename!(flows, :K_sum => :K)
+rename!(flows, :L_sum => :L)
+rename!(flows, :M_sum => :M)
+rename!(flows, :N_sum => :N)
+rename!(flows, :P_sum => :P)
+rename!(flows, :Q_sum => :Q)
+rename!(flows, :R_sum => :R)
+rename!(flows, :S_sum => :S)
 #------------------------------------------------------------------------------
 # what year are we importing?
 #------------------------------------------------------------------------------
@@ -219,6 +224,7 @@ Make prior scaled from Aus Data
 # Make vector of the proportion of each row sum element as a fraction of the 
 # total
 rowSumsProps = ones(20);
+ausGFCFtot = sum(ausGFCFrow);
 for i in 1:20
     rowSumsProps[i] = ausGFCFrow[i] / ausGFCFtot;
 end
@@ -233,11 +239,50 @@ end
 #==============================================================================
 Make prior from US Data
 ==============================================================================#
+# Adding empty rows
+push!(flows, ["A" zeros(1, ncol(flows) - 1)])
+push!(flows, ["D" zeros(1, ncol(flows) - 1)])
+push!(flows, ["H" zeros(1, ncol(flows) - 1)])
+push!(flows, ["K" zeros(1, ncol(flows) - 1)])
+push!(flows, ["N" zeros(1, ncol(flows) - 1)])
+push!(flows, ["P" zeros(1, ncol(flows) - 1)])
+push!(flows, ["Q" zeros(1, ncol(flows) - 1)])
+push!(flows, ["R" zeros(1, ncol(flows) - 1)])
+push!(flows, ["S" zeros(1, ncol(flows) - 1)])
+# Sorting Rows by industry index
+sort!(flows)
 
-print(flows)
-# want to sort all rows by industry in order
-# need to exclude title column after that step
+# Take column sum
+flowsTemp = deepcopy(flows);
+flowsColSum = sum(eachcol(select!(flowsTemp, Not(:Industry))));
 
+# Adding dwellings column
+flows[!, :T] = flowsColSum *rowSumsProps[20];
+
+# Adding public admin column
+flows[!, :O] = flowsColSum *rowSumsProps[15];
+
+# Sorting columns
+flows = (flows[!, [:Industry, :A, :B, :C, :D, :E, :F, :G, :H, :I, :J, :K, :L, 
+    :M, :N, :O, :P, :Q, :R, :S, :T]])
+
+# Scale to Aus Data
+flowsTemp = deepcopy(flows);
+flowsTemp = select!(flowsTemp, Not(:Industry));
+flowsTempSum = sum(Matrix(flowsTemp));
+print(flowsTemp)
+for i in 1:ncol(flowsTemp)
+    for j in 1:nrow(flowsTemp)
+        flowsTemp[j,i] = flowsTemp[j,i] / flowsTempSum * ausGFCFtot;
+    end
+end
+print(flowsTemp)
+flowsTemp[!, :Industry] = flows.Industry
+flows = deepcopy(flowsTemp)
+
+# Re -Sorting columns
+flows = (flows[!, [:Industry, :A, :B, :C, :D, :E, :F, :G, :H, :I, :J, :K, :L, 
+    :M, :N, :O, :P, :Q, :R, :S, :T]])
 
 #==============================================================================
 RAS
