@@ -131,99 +131,193 @@ ausGFCFrow = ausGFCFrow[Not(1, length(ausGFCFrow))];
 wrangle the IO table
 ==============================================================================#
 # Import IO data
-table8 = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table8.csv",
+table8raw = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table8.csv",
                               header=false));
-table5 = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table5.csv",
+table5raw = DataFrame(CSV.File("data"*pathmark*fyend*pathmark*"table5.csv",
                               header=false));
-# instantiate a variable for the number of sectors
-numsec = 0
-# since numsec is an array
-numsec = numsec[1];
-# find the title row index
-titlerow = findfirst(x -> occursin("USE", x), string.(table8[:,2]));
 # check the two tables have the same year
 commonwealthrow8 = findfirst(x -> occursin("Commonwealth", x), 
-                            string.(table8[:, 2]));
+                            string.(table8raw[:, 2]));
 commonwealthrow5 = findfirst(x -> occursin("Commonwealth", x), 
-                            string.(table5[:, 2]));
+                            string.(table5raw[:, 2]));
 # testing
-(table8[commonwealthrow8, 2] != table5[commonwealthrow5, 2]
- ? println("WARNING: io table release years don't match!")
- : println("io table release years match"))
-# standardise the table
-(occursin("111 INDUSTRIES", string(table8[1:6, 1]))
-  ? numsec = 111
-  : numsec = 114)
-numcol = numsec + 12;
-table8 = table8[:, 1:numcol];
-table5 = table5[:, 1:numcol];
-# create column titles
-coltitles = collect(values(table8[titlerow, :]))
-coltitles[1] = "IOIG"
-coltitles[2] = "industry"
-morecoltitles = collect(values(table8[titlerow + 2,
-                                        numsec + 3 : numsec + 12]))
-coltitles[numsec + 3 : numsec + 12] = morecoltitles
-coltitles[ismissing.(coltitles)] .= "0"
-coltitles = filter.(x -> !isspace(x), coltitles)
-for i in [1:1:numsec;]
-  coltitles[i + 2] = "IOIG"*values(coltitles[i + 2])
+(table8raw[commonwealthrow8, 2] != table5raw[commonwealthrow5, 2]
+ && println("WARNING: io table release years don't match!"))
+# find and set the number of sectors
+(occursin("111 INDUSTRIES", string(table8raw[1:6, 1]))
+  ? numioig = 111
+  : numioig = 114)
+# and the number of columns
+numcol = numioig + 12;
+#==============================================================================
+a function for creating complete tables
+==============================================================================#
+function makeioig(table)
+#table = table5raw
+  # find the title row index
+  titlerow = findfirst(x -> occursin("USE", x), string.(table[:,2]));
+  # standardise the table
+  table = table[:, 1:numcol];
+  # make column titles
+  coltitles = collect(values(table[titlerow, :]))
+  coltitles[1] = "IOIG"
+  coltitles[2] = "industry"
+  morecoltitles = collect(values(table[titlerow + 2, numioig + 3 : numioig + 12]))
+  coltitles[numioig + 3 : numioig + 12] = morecoltitles
+  coltitles[ismissing.(coltitles)] .= "0"
+  coltitles = filter.(x -> !isspace(x), coltitles)
+  for i in [1:1:numioig;]
+    coltitles[i + 2] = "IOIG"*values(coltitles[i + 2])
+  end
+  rename!(table, string.(coltitles), makeunique=true)
+  # remove initial rows and tidy up
+  table = table[Not(range(1, titlerow + 2)), :]
+  table = dropmissing(table, :industry)
+  table = table[Not(findall(x -> occursin("Commonwealth", x),
+                            string.(table.industry))),
+                :]
+  (findall(occursin.("Total uses", string.(table[:, 2]))) == Int64[]
+    ? (AProw = findfirst(occursin.("Australian Production",
+                                  string.(table[:, 2])));
+      table[AProw, 1] = "TU8AP5";
+      GDProw = findfirst(occursin.("GDP",
+                                  string.(table[:, 1])));
+      table = table[Not(GDProw), :];)
+    : (TUrow = findfirst(occursin.("Total uses", string.(table[:, 2])));
+       table[TUrow, 1] = "TU8AP5")
+  )
+  GVArow = findfirst(occursin.("Value Added", string.(table[:, 2])));
+  table[GVArow, 1] = "GVA";
+  table = dropmissing(table, :IOIG)
+  table.IOIG = string.(table.IOIG)
+  numrow = nrow(table)
+  table[numioig + 1 : numrow, 1] = "`".*table[numioig + 1 : numrow, 1]
+  # convert tables to numbers
+  table[:, 3:numcol] = filter.(x -> !isspace(x), table[:, 3:numcol])
+  table[!, 3:numcol] = parse.(Float64, table[!, 3:numcol])
+  sort!(table)
+  return table
 end
-rename!(table8, string.(coltitles), makeunique=true)
-rename!(table5, string.(coltitles), makeunique=true)
-# remove initial rows and tidy up
-table8 = table8[Not(range(1, titlerow + 2)), :]
-table8 = dropmissing(table8, :industry)
-table8 = table8[Not(findall(x ->
-                                occursin("Commonwealth", x)
-                                | occursin("Total uses", x),
-                                string.(table8.industry))),:]
-AProw8 = findfirst(x -> occursin("Australian Production", x),
-                   string.(table8[:, 2]));
-table8[AProw8, 1] = "AP";
-VArow8 = findfirst(x -> occursin("Value Added", x),
-                   string.(table8[:, 2]));
-table8[VArow8, 1] = "VA";
-table8.IOIG = string.(table8.IOIG)
-# same for table5
-table5 = table5[Not(range(1, titlerow + 2)), :]
-table5 = dropmissing(table5, :industry)
-table5 = table5[Not(findall(x -> 
-                                occursin("Commonwealth", x)
-                                | occursin("Gross Domestic Product", x),
-                                string.(table5.industry))),:]
-AProw5 = findfirst(x -> occursin("Australian Production", x),
-                   string.(table5[:, 2]))
-table5[AProw5, 1] = "AP";
-VArow5 = findfirst(x -> occursin("Value Added", x),
-                   string.(table5[:, 2]));
-table5[VArow5, 1] = "VA";
-table5.IOIG = string.(table5.IOIG)
-# convert tables to numbers
-table8[:, 3:numcol] = filter.(x -> !isspace(x), table8[:, 3:numcol])
-table8[!,3:numcol] = parse.(Float64, table8[!, 3:numcol])
-# same for table5
-table5[:, 3:numcol] = filter.(x -> !isspace(x), table5[:, 3:numcol])
-table5[!,3:numcol] = parse.(Float64, table5[!, 3:numcol])
-break
-# make sure our ioig codes match the number of columns  
-ioigcodes = string.(table8.IOIG[1:numsec])
-ioigcodesFloat = parse.(Float64, ioigcodes)
-ioigto20 = mapioig20(ioigcodesFloat)
-# make a dict mapping the ioig to anzsic 20
-ioigAs20=Array{Union{Nothing, String}}(nothing, length(ioigto20));
-for i in eachindex(ioigcodesFloat);
-    ioigAs20[i] = ioigto20[ioigcodesFloat[i]]
-end
+table8 = makeioig(table8raw)
+table5 = makeioig(table5raw)
 
-# take difference of two tables
-table8valsonly = parse.(Float64, table8[!, 3:numcol]))
-break
-table5mat = Matrix(parse.(Float64, table5[1:numsec, 3:numsec]))
-(diff = DataFrame(i => table8[!,i] .- table5[!, i]
-                  for i in names(table8)[3:numcol]))
-#ioigcodes, table8mat - table5mat)
-#diff = 
+#==============================================================================
+ take difference of the two tables
+==============================================================================#
+function makediff(t8, t5)
+  (ncol(t8) < 100
+     ? (firstcol = 2; numsec = ncol(t8) - 11)
+     : (firstcol = 3; numsec = ncol(t8) - 12)
+  )
+  # make diff
+  (tdiff = deepcopy(t8);
+    for i in range(1, nrow(t8))
+      for j in range(firstcol, ncol(t8))
+        tdiff[i, j] = t8[i, j] - t5[i, j]
+      end
+    end
+  )
+  # identify negative values (expect intermediates to be positive)
+  (negv = DataFrame(rowind = Int64[], colind = Int64[], val = Float64[]);
+    for i in range(1, nrow(tdiff))
+      for j in range(firstcol, ncol(tdiff))
+        tdiff[i, j] < 0 && push!(negv, [i j tdiff[i, j]])
+      end
+    end;
+   minimum(negv.val) < 0 &&
+     println("See negvals for the negative values in
+            the table of differences between table8 and table5");
+  )
+  # identify positive values in diff P6 (positive means re-export of imports)
+  (rowP6 = findfirst(occursin.("P6", tdiff[:, 1]));
+   posP6 = DataFrame(rowind = Int64[], colind = Int64[], val = Float64[]);
+   for i in range(firstcol, numsec + 1)
+     (tdiff[rowP6, i] > 0 && push!(posP6, [rowP6 i tdiff[rowP6, i]]))
+   end;
+   (maximum(posP6.val) > 0
+    && println("See (anz)posdiffP6 for the positive values of competing imports
+               in the table of differences between (anz)table8 and (anz)table5)"
+              )
+   );
+  )
+  (t8P6 = Vector(t8[findfirst(occursin.("P6", t8[:,1])),
+                    firstcol: numsec + firstcol - 1]);
+   tdiffTU8AP5 = Vector(tdiff[end, firstcol: numsec + firstcol - 1]);
+   (t8P6 - tdiffTU8AP5 != zeros(length(t8P6))
+    && println("WARNING: P6 of table8 is not equal to TU8AP5 of tablediff")  
+   );
+  )
+ return tdiff, negv, posP6
+end
+(tablediff, negvals, posdiffP6) = makediff(table8, table5);
+#==============================================================================
+ transform table to 20 sectors
+==============================================================================#
+# map ioig to ANZSIC20
+# the following function is impure in that it depends on dicts and functions ..
+# in concordance.jl
+function makeanztable(table, numsec=numioig)
+  # create a many-to-one column: anzcode per ioig
+  (# isolate ioig codes
+   ioigcodes = string.(table.IOIG[1:numsec]);
+   ioigcodesFloat = parse.(Float64, ioigcodes);
+   ioigto20 = mapioig20(ioigcodesFloat);
+   tmp = String[];
+   for i in eachindex(ioigcodesFloat)
+     push!(tmp, ioigto20[ioigcodesFloat[i]])
+   end;
+   # and the remaining terms in the table;
+   for i in range(1, nrow(table) - numsec)
+     push!(tmp, table[numsec + i, 1])
+   end;
+  anzperioigcol = tmp;
+  )
+  # collapse rows
+  (anztable = table;
+   insertcols!(anztable, 1, "ANZDIV" => anzperioigcol);
+   anztable = (combine(groupby(anztable, :ANZDIV),
+                        names(table, Between(:IOIG0101, :T6))
+                          .=> sum .=> Between(:IOIG0101, :T6))
+               );
+   sort!(anztable);
+  )
+  # collapse cols
+  (tmptable = transpose(Matrix(anztable[:, 2 : numioig + 1]));
+   tmptable = DataFrame(tmptable, :auto);
+   insertcols!(tmptable, 1, "ANZDIV" => anzperioigcol[1:numioig]);
+   tmptable = combine(groupby(tmptable, :ANZDIV), Not(1) .=> sum);
+   sort!(tmptable);
+   tmptablet = transpose(Matrix(tmptable[:, Not(1)]));
+   tmptablet = DataFrame(tmptablet, ANZSICDivByLetter);
+   insertcols!(tmptablet, 1, "ANZDIV" => anztable[:,1]);
+   anztable = anztable[:, Not(names(anztable, Between(:IOIG0101, :IOIG9502)))];
+   anztable = innerjoin(tmptablet, anztable, on = :ANZDIV);
+  )
+  return anztable
+end
+anztable8 = makeanztable(table8)
+anztable5 = makeanztable(table5)
+(anztablediff, anznegvals, anzposdiffP6) = makediff(anztable8, anztable5)
+
+#==============================================================================
+ras table
+==============================================================================#
+#make the table ras-ready
+#table = anztable8
+function makerr(table)
+  gvarow = findfirst(occursin.("GVA", table.ANZDIV))
+  t1row = findfirst(occursin.("T1", table.ANZDIV))
+  table = table[Not(gvarow, t1row), :]
+  table = table[:, Not([:T4, :T5])]
+  table.Q3 += table.Q4 + table.Q5
+  table = table[:, Not([:Q4, :Q5])]
+  rename!(table, :Q3 => "Q345")
+  return table
+end 
+anztable8rr = makerr(anztable8)
+anztable5rr = makerr(anztable5)
+stop
+
 # Isolate GFCF
 Q3 = parse.(Float64, table8.Q3)
 Q4 = parse.(Float64, table8.Q4)
@@ -235,10 +329,11 @@ ausprodrow = findfirst(x -> occursin("Australian Production", x),
 T1row = findfirst(x -> occursin("T1", x),
                   string.(table8.IOIG));
 ioigGfcftot = ioigGfcf[ausprodrow];
-ioigGfcf = ioigGfcf[1 : numsec] / ioigGfcf[T1row] * ioigGfcftot;
+ioigGfcf = ioigGfcf[1 : numioig] / ioigGfcf[T1row] * ioigGfcftot;
 ioigGfcf = DataFrame(:inv => ioigGfcf);
+#
 # Grouping GFCF receivable by 20 sectors (dwellings is all zero in capital)
-insertcols!(ioigGfcf, 1, :anzcode => ioigAs20);
+insertcols!(ioigGfcf, 1, :anzcode => anzperioigcol);
 splitIndustry = groupby(ioigGfcf, :anzcode);
 anzdivgfcf = combine(splitIndustry, valuecols(splitIndustry) .=> sum);
 sort!(anzdivgfcf);
