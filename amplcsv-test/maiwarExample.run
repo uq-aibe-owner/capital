@@ -1,0 +1,19 @@
+
+model diet.mod;
+load amplcsv.dll;
+table dietFoods1 IN "amplcsv" "foods1.csv": FOOD <- [FOOD], cost, f_min;
+table dietFoods2 IN "amplcsv" "foods2.csv": [FOOD], f_max;
+table dietNutrs IN "amplcsv" "nutrients.csv": NUTR <- [NUTR], n_min, n_max;
+table dietAmts IN "amplcsv" "amounts.csv": [NUTR, FOOD], amt;
+
+read table dietFoods1;
+read table dietFoods2;
+read table dietNutrs;
+read table dietAmts;
+
+solve;
+
+table dietResults OUT "amplcsv" "Buy.csv":
+   [FOOD], cost, Buy, Buy.rc ~ BuyRC, {j in FOOD} Buy[j]/f_max[j] ~ BuyFrac;
+
+write table dietResults;
